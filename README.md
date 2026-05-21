@@ -1,6 +1,6 @@
 # Hasura custom function with a table-row-array argument
 
-## TL;DR (the answer to Harris's question)
+## TL;DR
 
 **Yes — with one caveat.** Hasura *will* track a custom function whose argument
 is an array of a table's row type (`parks[]`) and the Postgres side is fully
