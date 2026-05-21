@@ -1,2 +1,2 @@
-DROP FUNCTION IF EXISTS summarize_parks(parks[]);
-DROP TABLE IF EXISTS parks;
+DROP FUNCTION IF EXISTS summarize_mountains(mountains[]);
+DROP TABLE IF EXISTS mountains;

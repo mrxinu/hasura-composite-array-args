@@ -1,9 +1,10 @@
 # Strongly-typed-in-SQL, stringly-typed-at-the-edge.
 #
-# Hasura exposes `parks_input` as a custom scalar named `_parks` (Postgres's
-# internal name for the `parks[]` array type). The value is a Postgres array
-# literal of composite literals; the function receives a real parks[] and
-# Postgres enforces the shape (column count, column types, order).
+# Hasura exposes `mountains_input` as a custom scalar named `_mountains`
+# (Postgres's internal name for the `mountains[]` array type). The value
+# is a Postgres array literal of composite literals; the function receives
+# a real mountains[] and Postgres enforces the shape (column count,
+# column types, order).
 #
 # Composite literal grammar reminder:
 #   array:     {elem1,elem2,...}
@@ -11,16 +12,16 @@
 #   text col:  bare if no spaces/commas, else "double-quoted" inside the
 #              composite, which means \" when embedded in a JSON string.
 
-query BigParks($p: _parks!) {
-  summarize_parks(args: { parks_input: $p }) {
+query TallMountains($m: _mountains!) {
+  summarize_mountains(args: { mountains_input: $m }) {
     id
     name
-    acreage
-    founded_in
+    elevation_m
+    first_summited
   }
 }
 
 # Variables (paste into the GraphiQL "Variables" panel):
 # {
-#   "p": "{\"(1,Yellowstone,2219791,1872)\",\"(2,Yosemite,759620,1890)\",\"(3,\\\"Crater Lake\\\",183224,1902)\"}"
+#   "m": "{\"(1,K2,8611,1954)\",\"(2,Denali,6190,1913)\",\"(3,\\\"Mont Blanc\\\",4809,1786)\"}"
 # }

@@ -1,2 +1,2 @@
-- "!include public_summarize_parks.yaml"
-- "!include public_summarize_parks_json.yaml"
+- "!include public_summarize_mountains.yaml"
+- "!include public_summarize_mountains_json.yaml"

@@ -1,1 +1,1 @@
-DROP FUNCTION IF EXISTS summarize_parks_json(jsonb);
+DROP FUNCTION IF EXISTS summarize_mountains_json(jsonb);

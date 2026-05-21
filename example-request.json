@@ -1,6 +1,6 @@
 {
-  "query": "query BigParks($p: _parks!) { summarize_parks(args: {parks_input: $p}) { id name acreage founded_in } }",
+  "query": "query TallMountains($m: _mountains!) { summarize_mountains(args: {mountains_input: $m}) { id name elevation_m first_summited } }",
   "variables": {
-    "p": "{\"(1,Yellowstone,2219791,1872)\",\"(2,Yosemite,759620,1890)\",\"(3,\\\"Crater Lake\\\",183224,1902)\"}"
+    "m": "{\"(1,K2,8611,1954)\",\"(2,Denali,6190,1913)\",\"(3,\\\"Mont Blanc\\\",4809,1786)\"}"
   }
 }

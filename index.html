@@ -201,10 +201,10 @@
 
 <div class="tldr">
   <p><strong>TL;DR.</strong> Hasura <em>will</em> track a custom Postgres function whose argument is an
-  array of a table's row type (e.g. <code>parks[]</code>), and the Postgres side is fully
+  array of a table's row type (e.g. <code>mountains[]</code>), and the Postgres side is fully
   strongly typed. But at the GraphQL boundary, Hasura exposes that argument as a <strong>custom
-  scalar named after the Postgres array type</strong> (here, <code>_parks</code> &mdash; Postgres's
-  internal name for <code>parks[]</code>). The client passes the value as a Postgres array
+  scalar named after the Postgres array type</strong> (here, <code>_mountains</code> &mdash; Postgres's
+  internal name for <code>mountains[]</code>). The client passes the value as a Postgres array
   literal of composite literals &mdash; a single opaque string &mdash; not as a structured
   GraphQL input object.</p>
 </div>
@@ -212,8 +212,8 @@
 <div class="twocol">
   <div class="card good">
     <h4>Strongly typed in SQL</h4>
-    <p>Inside the function, <code>parks_input</code> is a real <code>parks[]</code>.
-    <code>(p).name</code>, <code>(p).acreage</code>, etc. are real columns with real
+    <p>Inside the function, <code>mountains_input</code> is a real <code>mountains[]</code>.
+    <code>(m).name</code>, <code>(m).elevation_m</code>, etc. are real columns with real
     types. Wrong column count or wrong types &rarr; Postgres rejects it.</p>
   </div>
   <div class="card warn">
@@ -237,17 +237,17 @@ function at the GraphQL boundary.</p>
 <div class="flow">
   <div class="step">
     <h5>1. Table</h5>
-    <div class="what"><code>parks(id, name, acreage, founded_in)</code> &mdash; tracked by Hasura.</div>
+    <div class="what"><code>mountains(id, name, elevation_m, first_summited)</code> &mdash; tracked by Hasura.</div>
   </div>
   <div class="arrow">&rarr;</div>
   <div class="step">
     <h5>2. Function</h5>
-    <div class="what"><code>summarize_parks(parks_input parks[]) RETURNS SETOF parks</code></div>
+    <div class="what"><code>summarize_mountains(mountains_input mountains[]) RETURNS SETOF mountains</code></div>
   </div>
   <div class="arrow">&rarr;</div>
   <div class="step">
     <h5>3. GraphQL</h5>
-    <div class="what"><code>$p: _parks!</code> &mdash; custom scalar, opaque to the client.</div>
+    <div class="what"><code>$m: _mountains!</code> &mdash; custom scalar, opaque to the client.</div>
   </div>
 </div>
 
@@ -255,32 +255,32 @@ function at the GraphQL boundary.</p>
 
 <div class="codeblock" data-lang="sql">
   <div class="bar"><span class="lang">SQL</span><button class="copy-btn">Copy</button></div>
-  <pre><code><span class="tok-kw">CREATE TABLE</span> <span class="tok-ty">parks</span> (
-  id          <span class="tok-ty">serial</span> <span class="tok-kw">PRIMARY KEY</span>,
-  name        <span class="tok-ty">text</span>    <span class="tok-kw">NOT NULL</span>,
-  acreage     <span class="tok-ty">numeric</span> <span class="tok-kw">NOT NULL</span>,
-  founded_in  <span class="tok-ty">int</span>     <span class="tok-kw">NOT NULL</span>
+  <pre><code><span class="tok-kw">CREATE TABLE</span> <span class="tok-ty">mountains</span> (
+  id              <span class="tok-ty">serial</span> <span class="tok-kw">PRIMARY KEY</span>,
+  name            <span class="tok-ty">text</span>    <span class="tok-kw">NOT NULL</span>,
+  elevation_m     <span class="tok-ty">int</span>     <span class="tok-kw">NOT NULL</span>,
+  first_summited  <span class="tok-ty">int</span>     <span class="tok-kw">NOT NULL</span>
 );
 
-<span class="tok-kw">INSERT INTO</span> <span class="tok-ty">parks</span> (name, acreage, founded_in) <span class="tok-kw">VALUES</span>
-  (<span class="tok-str">'Yellowstone'</span>,    <span class="tok-num">2219791</span>, <span class="tok-num">1872</span>),
-  (<span class="tok-str">'Yosemite'</span>,        <span class="tok-num">759620</span>, <span class="tok-num">1890</span>),
-  (<span class="tok-str">'Crater Lake'</span>,     <span class="tok-num">183224</span>, <span class="tok-num">1902</span>);</code></pre>
+<span class="tok-kw">INSERT INTO</span> <span class="tok-ty">mountains</span> (name, elevation_m, first_summited) <span class="tok-kw">VALUES</span>
+  (<span class="tok-str">'K2'</span>,         <span class="tok-num">8611</span>, <span class="tok-num">1954</span>),
+  (<span class="tok-str">'Denali'</span>,     <span class="tok-num">6190</span>, <span class="tok-num">1913</span>),
+  (<span class="tok-str">'Mont Blanc'</span>, <span class="tok-num">4809</span>, <span class="tok-num">1786</span>);</code></pre>
 </div>
 
 <h3>The function</h3>
 
 <div class="codeblock" data-lang="sql">
   <div class="bar"><span class="lang">SQL</span><button class="copy-btn">Copy</button></div>
-  <pre><code><span class="tok-com">-- Argument is a strongly-typed array of the `parks` row type.
--- Inside the body, (p).name / (p).acreage / etc are real columns
+  <pre><code><span class="tok-com">-- Argument is a strongly-typed array of the `mountains` row type.
+-- Inside the body, (m).name / (m).elevation_m / etc are real columns
 -- with real Postgres types.</span>
-<span class="tok-kw">CREATE FUNCTION</span> <span class="tok-fn">summarize_parks</span>(parks_input <span class="tok-ty">parks[]</span>)
-<span class="tok-kw">RETURNS SETOF</span> <span class="tok-ty">parks</span>
+<span class="tok-kw">CREATE FUNCTION</span> <span class="tok-fn">summarize_mountains</span>(mountains_input <span class="tok-ty">mountains[]</span>)
+<span class="tok-kw">RETURNS SETOF</span> <span class="tok-ty">mountains</span>
 <span class="tok-kw">LANGUAGE</span> sql <span class="tok-kw">STABLE</span> <span class="tok-kw">AS</span> $$
-  <span class="tok-kw">SELECT</span> (p).*
-  <span class="tok-kw">FROM</span> <span class="tok-fn">unnest</span>(parks_input) <span class="tok-kw">AS</span> p
-  <span class="tok-kw">WHERE</span> (p).acreage &gt; <span class="tok-num">200000</span>;
+  <span class="tok-kw">SELECT</span> (m).*
+  <span class="tok-kw">FROM</span> <span class="tok-fn">unnest</span>(mountains_input) <span class="tok-kw">AS</span> m
+  <span class="tok-kw">WHERE</span> (m).elevation_m &gt; <span class="tok-num">6000</span>;
 $$;</code></pre>
 </div>
 
@@ -291,12 +291,12 @@ Hasura figures it out from the Postgres signature alone.</p>
 
 <div class="codeblock" data-lang="graphql">
   <div class="bar"><span class="lang">GraphQL</span><button class="copy-btn">Copy</button></div>
-  <pre><code><span class="tok-kw">query</span> <span class="tok-fn">BigParks</span>(<span class="tok-key">$p</span>: <span class="tok-ty">_parks!</span>) {
-  <span class="tok-fn">summarize_parks</span>(args: { parks_input: <span class="tok-key">$p</span> }) {
+  <pre><code><span class="tok-kw">query</span> <span class="tok-fn">TallMountains</span>(<span class="tok-key">$m</span>: <span class="tok-ty">_mountains!</span>) {
+  <span class="tok-fn">summarize_mountains</span>(args: { mountains_input: <span class="tok-key">$m</span> }) {
     id
     name
-    acreage
-    founded_in
+    elevation_m
+    first_summited
   }
 }</code></pre>
 </div>
@@ -306,20 +306,20 @@ Hasura figures it out from the Postgres signature alone.</p>
 <div class="codeblock" data-lang="json">
   <div class="bar"><span class="lang">JSON variables</span><button class="copy-btn">Copy</button></div>
   <pre><code>{
-  <span class="tok-str">"p"</span>: <span class="tok-str">"{\"(1,Yellowstone,2219791,1872)\",\"(2,Yosemite,759620,1890)\",\"(3,\\\"Crater Lake\\\",183224,1902)\"}"</span>
+  <span class="tok-str">"m"</span>: <span class="tok-str">"{\"(1,K2,8611,1954)\",\"(2,Denali,6190,1913)\",\"(3,\\\"Mont Blanc\\\",4809,1786)\"}"</span>
 }</code></pre>
 </div>
 
-<p>The function receives a real <code>parks[]</code> and the <code>WHERE (p).acreage &gt; 200000</code>
-clause does its job &mdash; Crater Lake (183,224 acres) is correctly filtered out:</p>
+<p>The function receives a real <code>mountains[]</code> and the <code>WHERE (m).elevation_m &gt; 6000</code>
+clause does its job &mdash; Mont Blanc (4,809 m) is correctly filtered out:</p>
 
 <div class="codeblock" data-lang="json">
   <div class="bar"><span class="lang">Response</span><button class="copy-btn">Copy</button></div>
   <pre><code>{
   <span class="tok-str">"data"</span>: {
-    <span class="tok-str">"summarize_parks"</span>: [
-      { <span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Yellowstone"</span>, <span class="tok-str">"acreage"</span>: <span class="tok-num">2219791</span>, <span class="tok-str">"founded_in"</span>: <span class="tok-num">1872</span> },
-      { <span class="tok-str">"id"</span>: <span class="tok-num">2</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Yosemite"</span>,    <span class="tok-str">"acreage"</span>: <span class="tok-num">759620</span>,  <span class="tok-str">"founded_in"</span>: <span class="tok-num">1890</span> }
+    <span class="tok-str">"summarize_mountains"</span>: [
+      { <span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"K2"</span>,     <span class="tok-str">"elevation_m"</span>: <span class="tok-num">8611</span>, <span class="tok-str">"first_summited"</span>: <span class="tok-num">1954</span> },
+      { <span class="tok-str">"id"</span>: <span class="tok-num">2</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Denali"</span>, <span class="tok-str">"elevation_m"</span>: <span class="tok-num">6190</span>, <span class="tok-str">"first_summited"</span>: <span class="tok-num">1913</span> }
     ]
   }
 }</code></pre>
@@ -334,16 +334,16 @@ Peeling it back:</p>
   <div class="lit">{ &hellip; }</div>
   <div class="desc">Outer braces &mdash; Postgres array literal.</div>
 
-  <div class="lit">"(1,Yellowstone,2219791,1872)"</div>
+  <div class="lit">"(1,K2,8611,1954)"</div>
   <div class="desc">Each element is a composite (row) literal: <code>(col1,col2,col3,col4)</code>. Composite literals inside an array literal are <strong>double-quoted</strong>.</div>
 
-  <div class="lit">"(3,\"Crater Lake\",&hellip;)"</div>
+  <div class="lit">"(3,\"Mont Blanc\",&hellip;)"</div>
   <div class="desc">Text values containing spaces or commas need <strong>another</strong> layer of double-quoting <em>inside</em> the composite literal.</div>
 
-  <div class="lit">"&hellip;\\\"Crater Lake\\\"&hellip;"</div>
+  <div class="lit">"&hellip;\\\"Mont Blanc\\\"&hellip;"</div>
   <div class="desc">All those double quotes then need backslash-escaping when the whole thing is embedded in a JSON string for the HTTP request.</div>
 
-  <div class="lit">(1, &hellip;, &hellip;, 1872)</div>
+  <div class="lit">(1, &hellip;, &hellip;, 1954)</div>
   <div class="desc"><strong>Column order must match the table's column order.</strong> You can't name columns at this layer &mdash; that's the missing strong typing.</div>
 </div>
 
@@ -357,13 +357,13 @@ GraphQL use cases that's the pragmatic call.</p>
 
 <div class="codeblock" data-lang="sql">
   <div class="bar"><span class="lang">SQL</span><button class="copy-btn">Copy</button></div>
-  <pre><code><span class="tok-kw">CREATE FUNCTION</span> <span class="tok-fn">summarize_parks_json</span>(parks_input <span class="tok-ty">jsonb</span>)
-<span class="tok-kw">RETURNS SETOF</span> <span class="tok-ty">parks</span>
+  <pre><code><span class="tok-kw">CREATE FUNCTION</span> <span class="tok-fn">summarize_mountains_json</span>(mountains_input <span class="tok-ty">jsonb</span>)
+<span class="tok-kw">RETURNS SETOF</span> <span class="tok-ty">mountains</span>
 <span class="tok-kw">LANGUAGE</span> sql <span class="tok-kw">STABLE</span> <span class="tok-kw">AS</span> $$
-  <span class="tok-kw">SELECT</span> p.*
-  <span class="tok-kw">FROM</span> <span class="tok-fn">jsonb_to_recordset</span>(parks_input)
-    <span class="tok-kw">AS</span> p(id <span class="tok-ty">int</span>, name <span class="tok-ty">text</span>, acreage <span class="tok-ty">numeric</span>, founded_in <span class="tok-ty">int</span>)
-  <span class="tok-kw">WHERE</span> p.acreage &gt; <span class="tok-num">200000</span>;
+  <span class="tok-kw">SELECT</span> m.*
+  <span class="tok-kw">FROM</span> <span class="tok-fn">jsonb_to_recordset</span>(mountains_input)
+    <span class="tok-kw">AS</span> m(id <span class="tok-ty">int</span>, name <span class="tok-ty">text</span>, elevation_m <span class="tok-ty">int</span>, first_summited <span class="tok-ty">int</span>)
+  <span class="tok-kw">WHERE</span> m.elevation_m &gt; <span class="tok-num">6000</span>;
 $$;</code></pre>
 </div>
 
@@ -372,10 +372,10 @@ $$;</code></pre>
 <div class="codeblock" data-lang="json">
   <div class="bar"><span class="lang">JSON variables</span><button class="copy-btn">Copy</button></div>
   <pre><code>{
-  <span class="tok-str">"p"</span>: [
-    { <span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Yellowstone"</span>, <span class="tok-str">"acreage"</span>: <span class="tok-num">2219791</span>, <span class="tok-str">"founded_in"</span>: <span class="tok-num">1872</span> },
-    { <span class="tok-str">"id"</span>: <span class="tok-num">2</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Yosemite"</span>,    <span class="tok-str">"acreage"</span>: <span class="tok-num">759620</span>,  <span class="tok-str">"founded_in"</span>: <span class="tok-num">1890</span> },
-    { <span class="tok-str">"id"</span>: <span class="tok-num">3</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Crater Lake"</span>, <span class="tok-str">"acreage"</span>: <span class="tok-num">183224</span>,  <span class="tok-str">"founded_in"</span>: <span class="tok-num">1902</span> }
+  <span class="tok-str">"m"</span>: [
+    { <span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"K2"</span>,         <span class="tok-str">"elevation_m"</span>: <span class="tok-num">8611</span>, <span class="tok-str">"first_summited"</span>: <span class="tok-num">1954</span> },
+    { <span class="tok-str">"id"</span>: <span class="tok-num">2</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Denali"</span>,     <span class="tok-str">"elevation_m"</span>: <span class="tok-num">6190</span>, <span class="tok-str">"first_summited"</span>: <span class="tok-num">1913</span> },
+    { <span class="tok-str">"id"</span>: <span class="tok-num">3</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Mont Blanc"</span>, <span class="tok-str">"elevation_m"</span>: <span class="tok-num">4809</span>, <span class="tok-str">"first_summited"</span>: <span class="tok-num">1786</span> }
   ]
 }</code></pre>
 </div>
@@ -384,7 +384,7 @@ $$;</code></pre>
 
 <div class="twocol">
   <div class="card">
-    <h4><span class="pill good">parks[]</span> when</h4>
+    <h4><span class="pill good">mountains[]</span> when</h4>
     <ul>
       <li>The function is also called from elsewhere in SQL (triggers, other functions, <code>psql</code>) and you want Postgres to enforce the shape there too.</li>
       <li>You want Postgres to do constraint-style validation (NOT NULL, types) before your function body sees the rows.</li>
@@ -423,7 +423,7 @@ curl -s -X POST http://localhost:58080/v1/graphql \
 <p>The console (with admin secret <code>toysecret</code>) is at
 <a href="http://localhost:58080/console">http://localhost:58080/console</a>; the GraphiQL
 tab is the easiest place to poke at the schema and watch Hasura's type for
-<code>parks_input</code> show up as <code>_parks!</code>.</p>
+<code>mountains_input</code> show up as <code>_mountains!</code>.</p>
 
 <footer>
   <p>Worked example &middot;
