@@ -1,0 +1,3 @@
+table:
+  name: parks
+  schema: public

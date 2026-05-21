@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hasura custom functions with a table-row-array argument</title>
+<meta name="description" content="Can Hasura track a Postgres function whose argument is an array of a table's row type? Yes — with one caveat. A worked example with the escape-decoding gotchas." />
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161922;
+    --panel-2: #1c2030;
+    --border: #2a2f42;
+    --text: #e6e8ee;
+    --muted: #9aa3b8;
+    --accent: #7aa2f7;
+    --accent-2: #bb9af7;
+    --good: #9ece6a;
+    --warn: #e0af68;
+    --bad: #f7768e;
+    --code-bg: #11131a;
+    --kbd-bg: #232636;
+    --link: #7dcfff;
+    --maxw: 900px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fbfbfd;
+      --panel: #ffffff;
+      --panel-2: #f4f5f9;
+      --border: #dfe2ec;
+      --text: #1a1d24;
+      --muted: #5b6478;
+      --accent: #3754c5;
+      --accent-2: #6b46c1;
+      --good: #237a3a;
+      --warn: #8a5a00;
+      --bad: #b3261e;
+      --code-bg: #f3f4f9;
+      --kbd-bg: #e6e8f0;
+      --link: #2b6cb0;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 56px 24px 96px; }
+  header { margin-bottom: 32px; }
+  header .eyebrow {
+    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  h1 {
+    font-size: clamp(28px, 4vw, 40px); line-height: 1.15; margin: 0 0 16px;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-size: 22px; margin: 48px 0 12px; letter-spacing: -0.005em;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px;
+  }
+  h3 { font-size: 17px; margin: 28px 0 10px; }
+  p, ul, ol { margin: 12px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 6px 0; }
+  a { color: var(--link); text-decoration: none; border-bottom: 1px solid transparent; }
+  a:hover { border-bottom-color: var(--link); }
+  code, kbd, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+  :not(pre) > code {
+    background: var(--code-bg); color: var(--text);
+    padding: 1px 6px; border-radius: 4px; font-size: 0.92em;
+    border: 1px solid var(--border);
+  }
+  kbd {
+    background: var(--kbd-bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; font-size: 0.85em;
+  }
+  .tldr {
+    background: var(--panel); border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px; border-radius: 8px; margin: 24px 0 8px;
+  }
+  .tldr strong { color: var(--accent); }
+  .twocol {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;
+  }
+  @media (max-width: 700px) { .twocol { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 18px;
+  }
+  .card h4 {
+    margin: 0 0 8px; font-size: 14px;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  }
+  .card.good { border-top: 3px solid var(--good); }
+  .card.warn { border-top: 3px solid var(--warn); }
+  .card p { margin: 6px 0; font-size: 14px; }
+
+  .codeblock {
+    position: relative; background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; margin: 12px 0; overflow: hidden;
+  }
+  .codeblock .bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--panel-2); border-bottom: 1px solid var(--border);
+    padding: 6px 12px; font-size: 12px; color: var(--muted);
+  }
+  .codeblock .bar .lang { font-family: ui-monospace, monospace; letter-spacing: 0.04em; }
+  .codeblock pre {
+    margin: 0; padding: 14px 16px; overflow-x: auto;
+    font-size: 13.5px; line-height: 1.55;
+  }
+  .codeblock pre code { background: transparent; border: 0; padding: 0; }
+  .copy-btn {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
+    font-family: inherit;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--text); }
+  .copy-btn.copied { color: var(--good); border-color: var(--good); }
+
+  /* token colors — keep simple, work in both themes */
+  .tok-kw   { color: var(--accent-2); }
+  .tok-str  { color: var(--good); }
+  .tok-num  { color: var(--warn); }
+  .tok-com  { color: var(--muted); font-style: italic; }
+  .tok-pun  { color: var(--muted); }
+  .tok-fn   { color: var(--accent); }
+  .tok-ty   { color: var(--accent); }
+  .tok-key  { color: var(--bad); }
+  @media (prefers-color-scheme: light) {
+    .tok-kw  { color: #6b46c1; }
+    .tok-str { color: #237a3a; }
+    .tok-num { color: #8a5a00; }
+    .tok-com { color: #6b7280; }
+    .tok-fn  { color: #2b4dbf; }
+    .tok-ty  { color: #2b4dbf; }
+    .tok-key { color: #b3261e; }
+  }
+
+  .flow {
+    display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+    gap: 12px; align-items: stretch; margin: 20px 0;
+  }
+  @media (max-width: 760px) {
+    .flow { grid-template-columns: 1fr; }
+    .flow .arrow { display: none; }
+  }
+  .flow .step {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .flow .step h5 {
+    margin: 0 0 6px; font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .flow .step .what { font-size: 13.5px; }
+  .flow .arrow {
+    align-self: center; color: var(--muted); font-size: 20px; user-select: none;
+  }
+
+  .decode-grid {
+    display: grid; grid-template-columns: auto 1fr; gap: 10px 16px;
+    margin: 14px 0; align-items: baseline;
+  }
+  .decode-grid .lit {
+    font-family: ui-monospace, monospace; font-size: 13px;
+    background: var(--code-bg); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+  }
+  .decode-grid .desc { font-size: 14px; color: var(--text); }
+  .decode-grid .desc .muted { color: var(--muted); }
+
+  footer {
+    margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px;
+  }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  .pill.good { color: var(--good); border-color: var(--good); }
+  .pill.warn { color: var(--warn); border-color: var(--warn); }
+  hr.soft { border: 0; border-top: 1px dashed var(--border); margin: 28px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Hasura &middot; PostgreSQL &middot; GraphQL</div>
+  <h1>Can a Hasura custom function take an array of a table's row type?</h1>
+  <p class="lede" style="color:var(--muted); font-size: 17px; margin-top: 4px;">
+    Yes &mdash; with one caveat. Strongly typed in SQL, stringly typed at the edge.
+  </p>
+</header>
+
+<div class="tldr">
+  <p><strong>TL;DR.</strong> Hasura <em>will</em> track a custom Postgres function whose argument is an
+  array of a table's row type (e.g. <code>parks[]</code>), and the Postgres side is fully
+  strongly typed. But at the GraphQL boundary, Hasura exposes that argument as a <strong>custom
+  scalar named after the Postgres array type</strong> (here, <code>_parks</code> &mdash; Postgres's
+  internal name for <code>parks[]</code>). The client passes the value as a Postgres array
+  literal of composite literals &mdash; a single opaque string &mdash; not as a structured
+  GraphQL input object.</p>
+</div>
+
+<div class="twocol">
+  <div class="card good">
+    <h4>Strongly typed in SQL</h4>
+    <p>Inside the function, <code>parks_input</code> is a real <code>parks[]</code>.
+    <code>(p).name</code>, <code>(p).acreage</code>, etc. are real columns with real
+    types. Wrong column count or wrong types &rarr; Postgres rejects it.</p>
+  </div>
+  <div class="card warn">
+    <h4>Stringly typed at the edge</h4>
+    <p>At the GraphQL layer it's a single scalar with no per-field validation.
+    Clients must hand-build a Postgres array literal of composite literals, with
+    all the nested-quoting that implies.</p>
+  </div>
+</div>
+
+<p>Standing feature request to generate proper GraphQL input objects from composite
+types: <a href="https://github.com/hasura/graphql-engine/issues/7078">hasura/graphql-engine#7078</a>
+(related: <a href="https://github.com/hasura/graphql-engine/issues/3757">#3757</a>).</p>
+
+<h2>The shape of it</h2>
+
+<p>Three pieces collaborate. A table whose row type we want to pass in. A function
+that takes an array of that row type. Hasura, tracking both and exposing the
+function at the GraphQL boundary.</p>
+
+<div class="flow">
+  <div class="step">
+    <h5>1. Table</h5>
+    <div class="what"><code>parks(id, name, acreage, founded_in)</code> &mdash; tracked by Hasura.</div>
+  </div>
+  <div class="arrow">&rarr;</div>
+  <div class="step">
+    <h5>2. Function</h5>
+    <div class="what"><code>summarize_parks(parks_input parks[]) RETURNS SETOF parks</code></div>
+  </div>
+  <div class="arrow">&rarr;</div>
+  <div class="step">
+    <h5>3. GraphQL</h5>
+    <div class="what"><code>$p: _parks!</code> &mdash; custom scalar, opaque to the client.</div>
+  </div>
+</div>
+
+<h3>The table</h3>
+
+<div class="codeblock" data-lang="sql">
+  <div class="bar"><span class="lang">SQL</span><button class="copy-btn">Copy</button></div>
+  <pre><code><span class="tok-kw">CREATE TABLE</span> <span class="tok-ty">parks</span> (
+  id          <span class="tok-ty">serial</span> <span class="tok-kw">PRIMARY KEY</span>,
+  name        <span class="tok-ty">text</span>    <span class="tok-kw">NOT NULL</span>,
+  acreage     <span class="tok-ty">numeric</span> <span class="tok-kw">NOT NULL</span>,
+  founded_in  <span class="tok-ty">int</span>     <span class="tok-kw">NOT NULL</span>
+);
+
+<span class="tok-kw">INSERT INTO</span> <span class="tok-ty">parks</span> (name, acreage, founded_in) <span class="tok-kw">VALUES</span>
+  (<span class="tok-str">'Yellowstone'</span>,    <span class="tok-num">2219791</span>, <span class="tok-num">1872</span>),
+  (<span class="tok-str">'Yosemite'</span>,        <span class="tok-num">759620</span>, <span class="tok-num">1890</span>),
+  (<span class="tok-str">'Crater Lake'</span>,     <span class="tok-num">183224</span>, <span class="tok-num">1902</span>);</code></pre>
+</div>
+
+<h3>The function</h3>
+
+<div class="codeblock" data-lang="sql">
+  <div class="bar"><span class="lang">SQL</span><button class="copy-btn">Copy</button></div>
+  <pre><code><span class="tok-com">-- Argument is a strongly-typed array of the `parks` row type.
+-- Inside the body, (p).name / (p).acreage / etc are real columns
+-- with real Postgres types.</span>
+<span class="tok-kw">CREATE FUNCTION</span> <span class="tok-fn">summarize_parks</span>(parks_input <span class="tok-ty">parks[]</span>)
+<span class="tok-kw">RETURNS SETOF</span> <span class="tok-ty">parks</span>
+<span class="tok-kw">LANGUAGE</span> sql <span class="tok-kw">STABLE</span> <span class="tok-kw">AS</span> $$
+  <span class="tok-kw">SELECT</span> (p).*
+  <span class="tok-kw">FROM</span> <span class="tok-fn">unnest</span>(parks_input) <span class="tok-kw">AS</span> p
+  <span class="tok-kw">WHERE</span> (p).acreage &gt; <span class="tok-num">200000</span>;
+$$;</code></pre>
+</div>
+
+<p>Nothing special goes in Hasura's metadata for the composite-array argument &mdash;
+Hasura figures it out from the Postgres signature alone.</p>
+
+<h3>The GraphQL query</h3>
+
+<div class="codeblock" data-lang="graphql">
+  <div class="bar"><span class="lang">GraphQL</span><button class="copy-btn">Copy</button></div>
+  <pre><code><span class="tok-kw">query</span> <span class="tok-fn">BigParks</span>(<span class="tok-key">$p</span>: <span class="tok-ty">_parks!</span>) {
+  <span class="tok-fn">summarize_parks</span>(args: { parks_input: <span class="tok-key">$p</span> }) {
+    id
+    name
+    acreage
+    founded_in
+  }
+}</code></pre>
+</div>
+
+<p>And the variables payload &mdash; this is where the catch lives:</p>
+
+<div class="codeblock" data-lang="json">
+  <div class="bar"><span class="lang">JSON variables</span><button class="copy-btn">Copy</button></div>
+  <pre><code>{
+  <span class="tok-str">"p"</span>: <span class="tok-str">"{\"(1,Yellowstone,2219791,1872)\",\"(2,Yosemite,759620,1890)\",\"(3,\\\"Crater Lake\\\",183224,1902)\"}"</span>
+}</code></pre>
+</div>
+
+<p>The function receives a real <code>parks[]</code> and the <code>WHERE (p).acreage &gt; 200000</code>
+clause does its job &mdash; Crater Lake (183,224 acres) is correctly filtered out:</p>
+
+<div class="codeblock" data-lang="json">
+  <div class="bar"><span class="lang">Response</span><button class="copy-btn">Copy</button></div>
+  <pre><code>{
+  <span class="tok-str">"data"</span>: {
+    <span class="tok-str">"summarize_parks"</span>: [
+      { <span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Yellowstone"</span>, <span class="tok-str">"acreage"</span>: <span class="tok-num">2219791</span>, <span class="tok-str">"founded_in"</span>: <span class="tok-num">1872</span> },
+      { <span class="tok-str">"id"</span>: <span class="tok-num">2</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Yosemite"</span>,    <span class="tok-str">"acreage"</span>: <span class="tok-num">759620</span>,  <span class="tok-str">"founded_in"</span>: <span class="tok-num">1890</span> }
+    ]
+  }
+}</code></pre>
+</div>
+
+<h2>Decoding the composite-array literal</h2>
+
+<p>That JSON string value is several layers of quoting compressed into one line.
+Peeling it back:</p>
+
+<div class="decode-grid">
+  <div class="lit">{ &hellip; }</div>
+  <div class="desc">Outer braces &mdash; Postgres array literal.</div>
+
+  <div class="lit">"(1,Yellowstone,2219791,1872)"</div>
+  <div class="desc">Each element is a composite (row) literal: <code>(col1,col2,col3,col4)</code>. Composite literals inside an array literal are <strong>double-quoted</strong>.</div>
+
+  <div class="lit">"(3,\"Crater Lake\",&hellip;)"</div>
+  <div class="desc">Text values containing spaces or commas need <strong>another</strong> layer of double-quoting <em>inside</em> the composite literal.</div>
+
+  <div class="lit">"&hellip;\\\"Crater Lake\\\"&hellip;"</div>
+  <div class="desc">All those double quotes then need backslash-escaping when the whole thing is embedded in a JSON string for the HTTP request.</div>
+
+  <div class="lit">(1, &hellip;, &hellip;, 1872)</div>
+  <div class="desc"><strong>Column order must match the table's column order.</strong> You can't name columns at this layer &mdash; that's the missing strong typing.</div>
+</div>
+
+<h2>The pragmatic alternative: <code>jsonb</code></h2>
+
+<p>If you don't strictly need Postgres-side type enforcement, take a <code>jsonb</code>
+argument and <code>jsonb_to_recordset(&hellip;)</code> inside the function. Clients then
+pass a normal JSON array of objects &mdash; no Postgres-literal escaping, no
+positional-column trap. You lose Postgres-side type checking, but for most
+GraphQL use cases that's the pragmatic call.</p>
+
+<div class="codeblock" data-lang="sql">
+  <div class="bar"><span class="lang">SQL</span><button class="copy-btn">Copy</button></div>
+  <pre><code><span class="tok-kw">CREATE FUNCTION</span> <span class="tok-fn">summarize_parks_json</span>(parks_input <span class="tok-ty">jsonb</span>)
+<span class="tok-kw">RETURNS SETOF</span> <span class="tok-ty">parks</span>
+<span class="tok-kw">LANGUAGE</span> sql <span class="tok-kw">STABLE</span> <span class="tok-kw">AS</span> $$
+  <span class="tok-kw">SELECT</span> p.*
+  <span class="tok-kw">FROM</span> <span class="tok-fn">jsonb_to_recordset</span>(parks_input)
+    <span class="tok-kw">AS</span> p(id <span class="tok-ty">int</span>, name <span class="tok-ty">text</span>, acreage <span class="tok-ty">numeric</span>, founded_in <span class="tok-ty">int</span>)
+  <span class="tok-kw">WHERE</span> p.acreage &gt; <span class="tok-num">200000</span>;
+$$;</code></pre>
+</div>
+
+<p>And the variables become a structured JSON array &mdash; no escape gymnastics:</p>
+
+<div class="codeblock" data-lang="json">
+  <div class="bar"><span class="lang">JSON variables</span><button class="copy-btn">Copy</button></div>
+  <pre><code>{
+  <span class="tok-str">"p"</span>: [
+    { <span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Yellowstone"</span>, <span class="tok-str">"acreage"</span>: <span class="tok-num">2219791</span>, <span class="tok-str">"founded_in"</span>: <span class="tok-num">1872</span> },
+    { <span class="tok-str">"id"</span>: <span class="tok-num">2</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Yosemite"</span>,    <span class="tok-str">"acreage"</span>: <span class="tok-num">759620</span>,  <span class="tok-str">"founded_in"</span>: <span class="tok-num">1890</span> },
+    { <span class="tok-str">"id"</span>: <span class="tok-num">3</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"Crater Lake"</span>, <span class="tok-str">"acreage"</span>: <span class="tok-num">183224</span>,  <span class="tok-str">"founded_in"</span>: <span class="tok-num">1902</span> }
+  ]
+}</code></pre>
+</div>
+
+<h3>When to reach for which</h3>
+
+<div class="twocol">
+  <div class="card">
+    <h4><span class="pill good">parks[]</span> when</h4>
+    <ul>
+      <li>The function is also called from elsewhere in SQL (triggers, other functions, <code>psql</code>) and you want Postgres to enforce the shape there too.</li>
+      <li>You want Postgres to do constraint-style validation (NOT NULL, types) before your function body sees the rows.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4><span class="pill warn">jsonb</span> when</h4>
+    <ul>
+      <li>The function is GraphQL-facing only and clients shouldn't have to hand-build Postgres array literals.</li>
+      <li>You're willing to hand-roll input validation (or live without it) in exchange for clean JSON-object input.</li>
+    </ul>
+  </div>
+</div>
+
+<hr class="soft" />
+
+<h2>Run the demo yourself</h2>
+
+<p>The full setup &mdash; Postgres + Hasura via Docker Compose, migrations, metadata,
+and the example request &mdash; lives in the companion repo. Two services come up on
+remapped ports (<code>58080</code> for Hasura, <code>55432</code> for Postgres) so nothing collides
+with whatever you already have running.</p>
+
+<div class="codeblock" data-lang="bash">
+  <div class="bar"><span class="lang">bash</span><button class="copy-btn">Copy</button></div>
+  <pre><code>git clone https://github.com/mrxinu/hasura-composite-array-args.git
+<span class="tok-kw">cd</span> hasura-composite-array-args
+docker compose up -d
+<span class="tok-com"># wait ~15s for migrations to apply, then:</span>
+curl -s -X POST http://localhost:58080/v1/graphql \
+  -H <span class="tok-str">'X-Hasura-Admin-Secret: toysecret'</span> \
+  -H <span class="tok-str">'Content-Type: application/json'</span> \
+  -d @example-request.json | python3 -m json.tool</code></pre>
+</div>
+
+<p>The console (with admin secret <code>toysecret</code>) is at
+<a href="http://localhost:58080/console">http://localhost:58080/console</a>; the GraphiQL
+tab is the easiest place to poke at the schema and watch Hasura's type for
+<code>parks_input</code> show up as <code>_parks!</code>.</p>
+
+<footer>
+  <p>Worked example &middot;
+  Hasura <code>v2.40.0</code> &middot;
+  PostgreSQL <code>16</code> &middot;
+  <a href="https://github.com/mrxinu/hasura-composite-array-args">source on GitHub</a></p>
+</footer>
+
+</div>
+
+<script>
+  // copy buttons
+  document.querySelectorAll('.codeblock').forEach(block => {
+    const btn = block.querySelector('.copy-btn');
+    const pre = block.querySelector('pre');
+    if (!btn || !pre) return;
+    btn.addEventListener('click', async () => {
+      const text = pre.innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+        const orig = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('copied');
+        }, 1400);
+      } catch (e) {
+        btn.textContent = 'Press ⌘C';
+      }
+    });
+  });
+</script>
+</body>
+</html>

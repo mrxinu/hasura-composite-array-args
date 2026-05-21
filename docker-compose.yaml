@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: toypass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  hasura:
+    image: hasura/graphql-engine:v2.40.0.cli-migrations-v3
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "58080:8080"
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgres://postgres:toypass@postgres:5432/postgres
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://postgres:toypass@postgres:5432/postgres
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_DEV_MODE: "true"
+      HASURA_GRAPHQL_ADMIN_SECRET: toysecret
+      HASURA_GRAPHQL_METADATA_DIR: /hasura-metadata
+      HASURA_GRAPHQL_MIGRATIONS_DIR: /hasura-migrations
+    volumes:
+      - ./hasura/metadata:/hasura-metadata
+      - ./hasura/migrations:/hasura-migrations
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  # One-shot bootstrap: waits for Hasura, then forces a metadata reload so
+  # the table + function tracking entries in metadata pick up the schema
+  # created by migrations. Without this, first boot leaves Hasura with
+  # inconsistent metadata until you reload by hand.
+  bootstrap:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      hasura:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - |
+        echo "[bootstrap] reloading Hasura metadata..."
+        curl -fsS -X POST http://hasura:8080/v1/metadata \
+          -H 'X-Hasura-Admin-Secret: toysecret' \
+          -H 'Content-Type: application/json' \
+          -d '{"type":"reload_metadata","args":{"reload_sources":true}}'
+        echo
+        echo "[bootstrap] done."
+
+volumes:
+  pgdata:

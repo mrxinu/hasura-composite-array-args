@@ -1,0 +1,6 @@
+{
+  "query": "query BigParks($p: _parks!) { summarize_parks(args: {parks_input: $p}) { id name acreage founded_in } }",
+  "variables": {
+    "p": "{\"(1,Yellowstone,2219791,1872)\",\"(2,Yosemite,759620,1890)\",\"(3,\\\"Crater Lake\\\",183224,1902)\"}"
+  }
+}
