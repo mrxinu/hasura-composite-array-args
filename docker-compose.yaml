@@ -27,7 +27,6 @@ services:
       HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://postgres:toypass@postgres:5432/postgres
       HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
       HASURA_GRAPHQL_DEV_MODE: "true"
-      HASURA_GRAPHQL_ADMIN_SECRET: toysecret
       HASURA_GRAPHQL_METADATA_DIR: /hasura-metadata
       HASURA_GRAPHQL_MIGRATIONS_DIR: /hasura-migrations
     volumes:
@@ -55,7 +54,6 @@ services:
       - |
         echo "[bootstrap] reloading Hasura metadata..."
         curl -fsS -X POST http://hasura:8080/v1/metadata \
-          -H 'X-Hasura-Admin-Secret: toysecret' \
           -H 'Content-Type: application/json' \
           -d '{"type":"reload_metadata","args":{"reload_sources":true}}'
         echo

@@ -415,12 +415,11 @@ with whatever you already have running.</p>
 docker compose up -d
 <span class="tok-com"># wait ~15s for migrations to apply, then:</span>
 curl -s -X POST http://localhost:58080/v1/graphql \
-  -H <span class="tok-str">'X-Hasura-Admin-Secret: toysecret'</span> \
   -H <span class="tok-str">'Content-Type: application/json'</span> \
   -d @example-request.json | python3 -m json.tool</code></pre>
 </div>
 
-<p>The console (with admin secret <code>toysecret</code>) is at
+<p>The console is at
 <a href="http://localhost:58080/console">http://localhost:58080/console</a>; the GraphiQL
 tab is the easiest place to poke at the schema and watch Hasura's type for
 <code>mountains_input</code> show up as <code>_mountains!</code>.</p>

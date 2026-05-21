@@ -79,7 +79,7 @@ Mont Blanc (4,809 m) is correctly filtered out — the function got a real
 ```bash
 docker compose up -d
 # Wait ~15s for migrations to apply. Then either:
-#   - open http://localhost:58080/console (admin secret: `toysecret`)
+#   - open http://localhost:58080/console
 #   - or hit the GraphQL endpoint with the curl below
 ```
 
@@ -88,7 +88,6 @@ init), poke it:
 
 ```bash
 curl -s -X POST http://localhost:58080/v1/metadata \
-  -H 'X-Hasura-Admin-Secret: toysecret' \
   -H 'Content-Type: application/json' \
   -d '{"type":"reload_metadata","args":{"reload_sources":true}}'
 ```
@@ -97,7 +96,6 @@ Then run the query:
 
 ```bash
 curl -s -X POST http://localhost:58080/v1/graphql \
-  -H 'X-Hasura-Admin-Secret: toysecret' \
   -H 'Content-Type: application/json' \
   -d @example-request.json | python3 -m json.tool
 ```
